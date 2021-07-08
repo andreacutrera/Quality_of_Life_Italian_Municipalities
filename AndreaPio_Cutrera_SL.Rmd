@@ -1,0 +1,1015 @@
+---
+title: "The quality of life in Italian Municipalities"
+subtitle: "Statistical Learning Project"
+author: "Andrea Pio Cutrera - 965591"
+date: "7/3/2021"
+output:
+  pdf_document:
+    latex_engine: xelatex
+abstract: Italy is a very heterogeneous country in which the fundamental political units (i.e., municipalities) have some similarities and much differences. This is what makes Italy a unique country in the world, full of different richness, but also many weakness; some areas share economical and social characteristics, other differs in natural and cultural resources. In this paper, Quality of life, which is an indicator measured in one dimension, is modelled to find the best explanatory variables which are able to describe it for the municipalities that are provincial capital. A classification algorithm is implemented for the categorization between low, medium, high and very high quality of life. Then in the last part it is made an effort to understand the main dimensions along which data are spread the most, trying also to find clusters between municipalities and provinces.
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+```
+
+## 1. Introduction
+
+The research question of this paper started from the curiosity of whether there exists a model which describes the **quality of life of italian Municipalities**. Every year the italian journal "Il Sole 24 Ore" makes an aggregate ranking on the quality of life for all the provinces of Italy based on a bunch of indicators. But, which are the main features that explain a certain level of quality of life? 
+
+I started collecting data from many sources like the Urban Index from _"Department for Programming and Coordination of Political Economy"_ (in particular the office called _CIPU_ - Comitato Interministeriale per le Politiche Urbane) of the Presidency of the Council of Minister and the _"Il Sole 24 Ore"_ for the response variable. The first source had more than 100 variables and more than 8,000 observations (Municipalities), the second one, from which I took the variable used as dependent one, has the ranking and the associated score of quality of life for slightly more than 100 observations (Provinces).
+I made a subset for the municipalities' dataset choosing 35 variables among the 100+ which I considered as the most relevant for the aim of describing the quality of life; then I merged the two sources on the municipalities which are capitals of each province and I got a dataframe with at least **35 variables** (features) and **100 municipalities** (provincial capital) as observations.
+
+For the _Supervised Learning_ Part it has been used a feature selection model (**forward search**) in order to find **standard linear regression model** (i.e., _OLS_ - Ordiranry Least Square) with not too much regressors, choosing the number of regressors with the Bayes Information Criterion (i.e., _BIC_), the one which penalizes models with many independent variables.
+With the model generated and evaluated on the provincial capital municipalities I decided to make the **predictions on the remaining municipalities** (the observations for which the response variable is not available) inferring the response of quality of life.
+Then a classification model with k-Nearest Neighbour is implemented for the categorization of the predicted response (4 levels: low, medium, high, very high quality of life).
+
+For the _Unsupervised Learning_ part instead it is applied a **Principal Component Analysis** technique to project the data onto a lower dimansional space, which can be reduced to 5 (dimensions) but loosing a bit of information. This is maybe because our 35 variables measure pretty different things, evaluating each municipality from many perspectives. Nontheless the five principal dimensions are described and interpreted. Then it is applied the **k-means** algorithm to find relevant clusters between observations with some notion of distance. 
+
+An expected result is to find the usual picture of a fragmented country, especially by latitude: a rich and prosper _north_ against a poor and not developed _south_. Another expectation is the possibility to find a model which describes the quality of life score as positively affected by economic performance, availability of services and cultural richness. 
+
+## 2. Data Understanding
+
+The two data sources, as above mentioned are the _CIPU_ office^[CIPU office website: <http://presidenza.governo.it/AmministrazioneTrasparente/Organizzazione/ArticolazioneUffici/Dipartimenti/DISET.html>] of the "Department for the Programming and Coordination of Political Economy" for the **Urban Index** and the journal _Il Sole 24 Ore_^[Il Sole 24 Ore website:<https://st.ilsole24ore.com/includes2007/speciali/qualita-della-vita/scheda_finale.shtml?refresh_ce=1>] for the **quality of life score**.
+
+The Urban index is a project in collaboration with the the Department of Architecture and Urban Studies of University "Politecnico di Milano" which in 2015 collected data of 2011 at municipality level on a set of heterogeneous indicators. 
+
+All these indicators are the ones which have been choosen for the developing of useful tools for definition and evaluation of public policies in urban areas and also to define the contents of the National Urban Agenda^[Urban Index: Governo Italiano Presidenza del Consiglio dei Ministri, Segreteria tecnica del Comitato Interministeriale per le Politiche Urbane (CIPU) <https://www.urbanindex.it>].
+
+### 2.1. Independent variables
+
+The set of features of our observations taken from the _Urban Index_ is very big and comprehend even detailed measures of some characteristics of the municipalites (_7000+ observations_ without missing values), and for this reason it has been choosen to make a subset with the variables which could be more apt in describing the wellness in town. The selected variables are 35, and they are named in italian. For the sake of understanding, you can refer to the following dictionary in which they are named (in english) and briefly described:
+
+- _variazione_pop_residente_: decennal change in resident population (difference between the mean 1991-2001 and the mean 2001-2011);
+
+- _densita_umana_: human densisty (ratio between resident population + 1/3 of hotel seats over the total surface of land in square kilometers);
+
+- _mobilita_privata_: private mobility (share of people which daily uses a owned engined-mean of transportation);
+
+- _vecchiaia_: oldness measured as the ratio between people 65+ and 0-14;
+
+- _verde_urbano_pro_capite_: geen areas per capita (not agricultural);
+
+- _coppie_giovani_con_figli_: incidence of young couples with children (less than 35 years old);
+
+- _presenza_universitaria_: presence of university is an index made by the sum of universities (counted as 1) and other branches (counted as 0.5);
+
+- _pendolarismo_: commuting for work or study as the ratio between the sum of daily ingoing and outgoing people and total population;
+
+- _dinamismo_economico_: economic dynamism is the arithmetic mean of standardized values of 4 indexes:
+    - _Agriculture_: employed people / total population * 100;
+    - _Manufacturing_: employed people / total population * 100;
+    - _Trade_: employed people / total population * 100;
+    - _Services_: employed people / total population * 100;
+
+- _tasso_funzione_ricettiva_: compound index of tourism reception capability; it is the ratio between the hotel seats * 10,000 and the president population * square kilometers of land;
+
+- _visitatori_luoghi_cultura_: annual number of visitors in cultural places of the State;
+
+- _intrattenimento_: entertainment measured with the absolute number of places like amusement parks, aquariums, multiplex;
+
+- _digital_divide_: share of population excluded by the wide-band internet connection;
+
+- _stazioni_accessibili_: composite index which measures how much accessible are the train stations;
+
+- _posti_letto_ospedale_: number of hospital seats for 10.000 inhabitants;
+
+- _biblioteche_: number of libraries for 10.000 inhabitants;
+
+- _abbandono_scolastico_2grado_: young people with risk of quitting secondary school (as a share of total young students);
+
+- _disoccupazione_: ratio between people over 15 looking for a job and total active people in the same age range;
+
+- _famiglie_rischio_disagio_economico_: share of families with children with no active members in economical activity;
+
+- _anziani_soli_: share of families with one member in the age range 65+;
+
+- _suicidio_: mean of suicides in 2010-2011-2012;
+
+- _affollamento_abitazioni_: share of houses with less than 40 squared metres and 4 inhabitants, houses between 40-59 squared metres and 5 inhabitants, houses between 60-79 squared metres and 6 inhabitants out of the total occupied houses;
+
+- _servizi_abitazione_: arithmetic mean of the ratios between the 5 essential services in a house (drinking water, internal toilette, bathtub or shower, heating system and warm water);
+
+- _popolazione_straniera_: share of foreign population;
+
+- _gini_: is an index which computes the heterogeneity in between groups of the _IRPEF_ tax (income tax), since only the mean for each subgroup is available for that data (proxy of inequality);
+
+- _occupazione_ita_straniera_: ratio between the share of occupied italian citizens and the share of occupied foreign citizens in each age group of 15+ years old;
+
+- _occupazione_m_f_: ratio between the share of occupied males and the share of females in each age group of 15+ years old;
+
+- _suolo_agricolo_utilizzato_: percentage of land used for agriculture;
+
+- _rifiuti_urbani_pro_capite_: waste produced per capita;
+
+- _mobilita_lenta_: index measuring how much people moves on foot or by bike;
+
+- _acqua_potabile_: drinking water influed in the municipal net in cubic metres per year per capita;
+
+- _raccolta_differenziata_: percentage of waste differentiation (for recycling);
+
+- _impianti_fotovoltaici_: density of photovoltaic systems;
+
+- _auto_e5_e6_: percentage of car classified as E5 and E6;
+
+- _centri_eccellenza_: number of technological districts, centres of excellence and scientific parks;
+
+### 2.2. Response variable
+
+The response taken from the _Il Sole 24 Ore_ is a numeric variable which is available for 100 provinces and it is computed by taking into account many indexes measuring economy, health, crime, opportunities for free time, income and many more dimensions for 2011^[Il Sole 24 Ore website:<https://st.ilsole24ore.com/includes2007/speciali/qualita-della-vita/scheda_finale.shtml?refresh_ce=1>]. It has a distribution that can be seen in the following summary statistics and better with a histogram: 
+
+```{r dependent_variable_description, out.width="50%", fig.align='center'}
+library(dplyr)
+library(factoextra)
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(leaps)
+library(olsrr)
+library(car)
+library(ggpubr)
+library(Metrics)
+library(gridExtra)
+
+#read the csv I prepared in the first preprocessing and cleaning
+
+################################################################################
+setwd('/Users/andreacutrera/Desktop/Municipalities-Provinces')
+
+prov <- read.csv('prov.csv', sep = ',', header = T)
+municip <- read.csv('municipalities.csv', sep = ',', header = T)
+ranking <- read.csv('rank.csv', header = T)
+
+municip <- municip[,-1]
+ranking <- ranking[,-1]
+prov <- prov[,-1]
+rownames(prov) <- prov$codice_provincia
+prov <- prov[,-1]
+
+#now my dataset is made up by a bunch of int-num variables (58)
+#114 Provinces (observations for 2011)
+#str(prov)
+#dim(prov)
+#rownames(prov)
+#colnames(prov)
+################################################################################
+my_vars <- c('provincia', 'variazione_pop_residente', 
+          'densita_umana', 'mobilita_privata',
+          'vecchiaia', 'verde_urbano_pro_capite',
+          'coppie_giovani_con_figli', 'presenza_universitaria', 'pendolarismo',
+          'dinamismo_economico', 'tasso_funzione_ricettiva', 
+          'visitatori_luoghi_cultura', 'intrattenimento',
+          'digital_divide', 'stazioni_accessibili', 'posti_letto_ospedale',
+          'biblioteche', 'abbandono_scolastico_2grado', 'disoccupazione',
+          'famiglie_rischio_disagio_economico',
+          'anziani_soli', 'suicidio', 'affollamento_abitazioni',
+          'servizi_abitazione', 'popolazione_straniera', 'gini', 
+          'occupazione_ita_straniera', 'occupazione_m_f', 'suolo_agricolo_utilizzato',
+          'rifiuti_urbani_pro_capite', 'mobilita_lenta', 'acqua_potabile', 
+          'raccolta_differenziata', 'impianti_fotovoltaici', 
+          'auto_e5_e6', 'centri_eccellenza')
+#my_vars
+#length(my_vars)
+
+prov %>% select(all_of(my_vars)) -> prov_subset 
+
+#str(prov)
+#str(prov_subset)
+
+#59 vs 36 variables
+#dim(prov)
+#dim(prov_subset)
+
+# now I add the ranking and the response variable from the other source
+dataset <- merge(prov_subset, ranking, by = 'provincia')
+#str(dataset)
+summary(dataset$life_quality)
+```
+
+```{r boxplot_dependent_variable, out.width="50%", fig.align='center'}
+# SUPERVISED
+ggplot(dataset, aes(x=life_quality))+
+  geom_histogram(color = '#186D6F', fill = '#31BBBF') +
+  xlab("Quality of Life Score") +
+  ylab("Number of Countries")
+
+```
+
+With the histogram it seems to be normally distributed, but a check in the Shapiro-test (for normality) does not confirm it; it needs some _transformation_, and the _quadratic one_ is the only able to make it _"more" normal_, allowing us to reject no more the hypotheis of normality but at 90% of confidence level.
+
+```{r check_normality}
+shapiro.test((dataset$life_quality)**2)
+```
+
+## 3. Supervised Learning Methods
+
+### 3.1. Linear Regression and Stepwise Model Selection
+
+For the Supervised Learning part, as described above, it has been used the **forward stepwise selection** technique to find the most important features to be added to the null model and according to some method of evaluation (i.e., _BIC - Bayes Information Briterion_) it is choosen the model with 5 regressors. BIC criterion penalizes models with many features because of the _parsimonious modelling_ reason, as the problem-solving principle called **Occam's Razor** suggests: _"entities should not be multiplied without necessity"_, sometimes inaccurately paraphrased as "the simplest explanation is usually the best one"^[Wikipedia: Occam's Razor: <https://en.wikipedia.org/wiki/Occam%27s_razor>].
+
+```{r bic_5_vars, out.width="80%", fig.align='center'}
+regfit.fwd=regsubsets(life_quality~.-rank-provincia,data=dataset,method="forward", nvmax=10)
+reg.summary<-summary(regfit.fwd)
+par(mfrow=c(2,2))
+plot(reg.summary$bic,xlab="Number of Variables",ylab="BIC",types="l")
+plot(reg.summary$cp,xlab="Number of Variables",ylab="cp",types="l")
+plot(reg.summary$rss,xlab="Number of Variables",ylab="RSS",types="l")
+plot(reg.summary$adjr2,xlab="Number of Variables",ylab="ADJ_Rsq",types="l")
+```
+
+Forward search selects the following regressors:
+
+- _disoccupazione_ (**unemployment**);
+- _auto_e5_e6_ (**car classified as E5-E6**);
+- _occupazione_m_f_ (**employment male/female**);
+- _popolazione_straniera_ (**foreign population**);
+- _visitatori_luoghi_cultura_ (**visitors of cultural places**);
+
+and the _OLS model_ has **all the coefficients statistically significative**, and an adjusted $R^2$ of 0.7618:
+
+```{r, train_test_split, include=FALSE}
+#train-test split
+set.seed(12345)
+
+#deleting the names and the ranking
+#2:36 are the regressors
+#38 is the response
+train = sample(1:nrow(dataset), 0.7*nrow(dataset))
+train_set = dataset[train, -c(1, 37)]
+test_set = dataset[-train, -c(1, 37, 38)]
+
+test_target <- dataset[-train, 38]
+```
+
+```{r fwd_model}
+fwd.model <- lm(life_quality~disoccupazione+auto_e5_e6+occupazione_m_f+popolazione_straniera+visitatori_luoghi_cultura,data = dataset)
+summary(fwd.model)
+```
+
+At least training both models (the full model and the one with the 5 variables selected) on the training set and testing it with the test set, the **square root of mean squared error** is definetely **decresed** with the _forward search_.
+
+```{r rmse_dataframe}
+#compute predictions
+full.model <- lm(life_quality~., data = train_set)
+p <- predict(full.model, test_set)
+root_mse_full_model = rmse(test_target, p)
+#30.48 The mean squared error
+#root_mse_full_model
+fwd.model <- lm(life_quality~disoccupazione+auto_e5_e6+occupazione_m_f+popolazione_straniera+visitatori_luoghi_cultura,data = train_set)
+p <- predict(fwd.model, test_set)
+root_mse_fwd_model = rmse(test_target, p)
+#22.06 The mean squared error ---- decreased
+#root_mse_fwd_model
+#put together the 2 rmse to show it in the paper
+as.data.frame(cbind(root_mse_full_model, root_mse_fwd_model))
+```
+
+The residual diagnostics are at least confirming that errors of the model with 5 regressors are normally distributed, as it can be easily seen from the following output.
+
+```{r residual_diagnostics_1, fig.align='center', out.width="50%"}
+ols_test_normality(fwd.model)
+```
+
+```{r residual_diagnostics_2, fig.align='center', out.width="40%", include=FALSE}
+plot_1 <- ols_plot_resid_qq(fwd.model)
+plot_2 <- ols_plot_resid_hist(fwd.model)
+```
+
+```{r residual_diagnostics_3, fig.align='center', out.width="40%", out.height="40%"}
+grid.arrange(plot_1, plot_2, 
+             nrow = 1)
+```
+
+Once created and evaluated our simple regression model on the municipalities which are provincial capital, it has been used to make inference **predicting the response variable** for all the remaining observations (the entire set of municipality for which the same regressors are available). Below we can see the descriptive statistics of the response variable inferred on the bigger dataset. The quality of life now ranges from a minimum of 152 to a maximum of 560, with a mean of 451.
+
+```{r response_municipality_des_stat}
+##### CAN I MAKE A prediction on the MUNICIPALITIES -- Yes, we can!
+my_vars[1] <- "comune"
+municip %>% select(all_of(my_vars)) -> mun_subset
+#7921 MUNICIPALITIES ---- 36 variables
+#dim(mun_subset)
+
+predictions <- fwd.model %>% predict(mun_subset)
+
+#save the predictions with the label of the MUNICIPALITY
+quality_of_life_municipality <- as.data.frame(cbind(mun_subset[,1],    round(predictions, 2)))
+
+#char in numeric
+#str(quality_of_life_municipality)
+
+quality_of_life_municipality$V2 <- as.numeric(quality_of_life_municipality$V2)
+#str(quality_of_life_municipality)
+names(quality_of_life_municipality) <- c("comune", "life_quality")
+
+#now load the geography
+geo <- read.csv("/Users/andreacutrera/Desktop/Municipalities-Provinces/geography.csv", sep = ";")
+names(geo)[3] <- "comune"
+
+geo_mun <- merge(quality_of_life_municipality, geo, by = "comune")
+
+#str(geo_mun)
+
+#descriptive statistics of the predicted score for quality of life
+summary(geo_mun$life_quality)
+#min(geo_mun$life_quality)
+#max(geo_mun$life_quality)
+```
+
+We can also make a comparison of the distributions of the quality of life scores between the **5 levels of geographical areas** (North-East, North-West, Centre, Islands and South). From there It can be easily found that the first three groups, North-East, North-West and Centre have their distributions centered (with their median) **above the mean**, contrary to the two remaining groups of the South and Islands which are **well below**.
+
+```{r geo_distribution, out.width="60%", fig.align='center'}
+#CATEGORY of geographical area
+geo_mun$geo <- as.factor(geo_mun$geo)
+#str(geo_mun)
+
+#Region comparison between scores
+ggboxplot(geo_mun, x = "deominazione_geo", y = "life_quality", color = "geo", 
+          legend = "none") +
+  geom_hline(yintercept = mean(geo_mun$life_quality), linetype = 2)+ # Add horizontal line at base mean
+  ylim(150, 600)+
+  xlab("Macro Area")+
+  ylab("Life Quality Index")
+```
+
+If we want to come more in depth of the decomposition for the geographical areas, we can check at **regional level** the 20 ditributions of the quality of life score of municipalities.
+Even here it is possible to check what it has been found before: all the regions of the south and the islands have their distributions centered with their median below the mean, and the center-north ones are above, _except_ for the *Lazio*.
+
+```{r regional_distribution, out.width="60%", fig.align='center'}
+#CATEGORY of REGIONAL area
+geo_mun$Codice_Regione <- as.factor(geo_mun$Codice_Regione)
+#str(geo_mun)
+
+geo_mun <- arrange(geo_mun, life_quality)
+
+#reversed axis
+ggboxplot(geo_mun, x = "Denominazione_Regione", y = "life_quality", color = "Denominazione_Regione", 
+          legend = "none", sort.val = "desc", sort.by.groups = FALSE,
+          x.text.angle = 90, rotate = TRUE, ggtheme = theme_minimal()) +
+  geom_hline(yintercept = mean(geo_mun$life_quality), linetype = 2)+ # Add horizontal line at base mean
+  ylim(150, 600)+
+  xlab("Region") 
+```
+
+### 3.2. Classification of quality of life level
+
+Before starting to work on the _classification task_, we need to construct a categorical variable. To accomplish this task we discretize our observations in 4 categories according to their level of quality of life:
+
+- ```low```: _from 150 to 400_;
+- ```medium```: _from 401 to 480_;
+- ```high```: _from 481 to 500_;
+- ```very high```: _from 501 to 570_;
+
+and they are distributed in the following way:
+
+```{r categorization}
+rownames(geo_mun) <- geo_mun$comune
+#Boxplot( geo_mun$life_quality , data = geo_mun, color = 'blue', 
+        #id=list(labels=rownames(geo_mun)), location = 'avoid')
+
+geo_mun$life <- cut(geo_mun$life_quality, breaks = c(150,400,480,500,570),
+                    labels = c('low', 'medium', 'high', 'very_high'))
+
+table(geo_mun$life)
+```
+
+Another pleasant way to understand the **relative frequencies** of the 4 levels of quality of life between the geographical areas and regional areas is to use the bar chart. From there it can be seen that:
+
+- **islands** have only low and medium quality of life municipalities (more than 60% low and less than 40% medium)
+
+- **south** has a very similar situation with almost the same number of low and medium municipalities, and just a few in high and very high
+
+- **centre** has the majority of medium quality of life municipalities (more than 60%) and more than 25% of high quality ones
+
+- **north-east** and **north-west** share quite the same situation with a majority of high quality municipalities, but north-east has a slightly better situation
+
+```{r area_share_for_classification, out.width="50%", fig.align='center'}
+#frequencies of low-medium-high-very_high municipalities for area
+geo_mun$life <- cut(geo_mun$life_quality, breaks = c(150,400,480,500,570),
+                    labels = c('low', 'medium', 'high', 'very_high'))
+geo_mun <- arrange(geo_mun, life_quality)
+geo_mun_for_bar <- geo_mun %>% 
+  group_by(deominazione_geo, life) %>%
+  summarise(n=n()) %>%
+  mutate(freq=n/sum(n))
+geo_mun_for_bar <- arrange(geo_mun_for_bar, life)
+
+#Share of low-medium-high-very_high municipalities------AREA
+ggplot(geo_mun_for_bar, aes(x=reorder(deominazione_geo,freq), fill=life, group=life)) +
+  geom_bar(aes(y=freq), stat = 'identity', position = 'dodge')+
+  xlab('Group areas')+
+  ylab("Relative frequency")
+```
+
+Even at regional level it can be found the discussion already done for the geographical areas. And plotting the same information with pie charts allows us to discriminate in two "clusters" the regions in which the quality of life is at least very low, from the regions in which is high. The discriminant is ultimately the geography: _south versus north_.
+
+```{r regions_share_for_classification, out.width="70%", fig.align='center'}
+geo_mun_for_bar <- geo_mun %>% 
+  group_by(Denominazione_Regione, life) %>%
+  summarise(n=n()) %>%
+  mutate(freq=n/sum(n))
+
+#Share of low-medium-high-very_high municipalities------REGIONS
+ggplot(geo_mun_for_bar, aes(x=reorder(Denominazione_Regione,freq), fill=life, group=life)) +
+  geom_bar(aes(y=freq), stat = 'identity', position = 'dodge')+
+  coord_flip()+
+  ylab("Relative frequency by group")+
+  xlab("Regions")
+```
+
+```{r pie_regions_1, out.width="60%", fig.align='center'}
+a <- ggplot(subset(geo_mun_for_bar, Denominazione_Regione == "Sicilia"), aes(x=" ", y=freq, fill=life)) +
+  geom_bar(width = 1, stat = "identity") +
+  coord_polar("y", start=0) + 
+  theme_void() +
+  ggtitle("Sicilia") +
+  scale_fill_manual(values=c("#EC7063", "#F4D03F"))
+b <- ggplot(subset(geo_mun_for_bar, Denominazione_Regione == "Puglia"), aes(x=" ", y=freq, fill=life)) +
+  geom_bar(width = 1, stat = "identity") +
+  coord_polar("y", start=0) + 
+  theme_void()+
+  ggtitle("Puglia") +
+  scale_fill_manual(values=c("#EC7063", "#F4D03F"))
+c <- ggplot(subset(geo_mun_for_bar, Denominazione_Regione == "Campania"), aes(x=" ", y=freq, fill=life)) +
+  geom_bar(width = 1, stat = "identity") +
+  coord_polar("y", start=0) + 
+  theme_void()+
+  ggtitle("Campania") +
+  scale_fill_manual(values=c("#EC7063", "#F4D03F"))
+d <- ggplot(subset(geo_mun_for_bar, Denominazione_Regione == "Basilicata"), aes(x=" ", y=freq, fill=life)) +
+  geom_bar(width = 1, stat = "identity") +
+  coord_polar("y", start=0) + 
+  theme_void()+
+  ggtitle("Basilicata") +
+  scale_fill_manual(values=c("#EC7063", "#F4D03F"))
+e <- ggplot(subset(geo_mun_for_bar, Denominazione_Regione == "Sardegna"), aes(x=" ", y=freq, fill=life)) +
+  geom_bar(width = 1, stat = "identity") +
+  coord_polar("y", start=0) + 
+  theme_void()+
+  ggtitle("Sardegna") +
+  scale_fill_manual(values=c("#EC7063", "#F4D03F"))
+f <- ggplot(subset(geo_mun_for_bar, Denominazione_Regione == "Molise"), aes(x=" ", y=freq, fill=life)) +
+  geom_bar(width = 1, stat = "identity") +
+  coord_polar("y", start=0) + 
+  theme_void()+
+  ggtitle("Molise") +
+  scale_fill_manual(values=c("#EC7063", "#F4D03F"))
+g <- ggplot(subset(geo_mun_for_bar, Denominazione_Regione == "Calabria"), aes(x=" ", y=freq, fill=life)) +
+  geom_bar(width = 1, stat = "identity") +
+  coord_polar("y", start=0) + 
+  theme_void()+
+  ggtitle("Calabria") +
+  scale_fill_manual(values=c("#EC7063", "#F4D03F", "#52BE80", "#5DADE2"))
+h <- ggplot(subset(geo_mun_for_bar, Denominazione_Regione == "Lazio"), aes(x=" ", y=freq, fill=life)) +
+  geom_bar(width = 1, stat = "identity") +
+  coord_polar("y", start=0) + 
+  theme_void()+
+  ggtitle("Lazio") +
+  scale_fill_manual(values=c("#EC7063", "#F4D03F", "#52BE80", "#5DADE2"))
+i <- ggplot(subset(geo_mun_for_bar, Denominazione_Regione == "Abruzzo"), aes(x=" ", y=freq, fill=life)) +
+  geom_bar(width = 1, stat = "identity") +
+  coord_polar("y", start=0) + 
+  theme_void()+
+  ggtitle("Abruzzo") +
+  scale_fill_manual(values=c("#EC7063", "#F4D03F", "#52BE80", "#5DADE2"))
+
+#grid.arrange(a, b, c, d, e, f, g, h, i, nrow = 3)
+
+j <- ggplot(subset(geo_mun_for_bar, Denominazione_Regione == "Umbria"), aes(x=" ", y=freq, fill=life)) +
+  geom_bar(width = 1, stat = "identity") +
+  coord_polar("y", start=0) + 
+  theme_void()+
+  ggtitle("Umbria")+
+  scale_fill_manual(values=c("#F1C40F", "#52BE80", "#5DADE2"))
+k <- ggplot(subset(geo_mun_for_bar, Denominazione_Regione == "Marche"), aes(x=" ", y=freq, fill=life)) +
+  geom_bar(width = 1, stat = "identity") +
+  coord_polar("y", start=0) + 
+  theme_void()+
+  ggtitle("Marche")+
+  scale_fill_manual(values=c("#EC7063", "#F4D03F", "#52BE80", "#71A0F1"))
+l <- ggplot(subset(geo_mun_for_bar, Denominazione_Regione == "Friuli-Venezia Giulia"), aes(x=" ", y=freq, fill=life)) +
+  geom_bar(width = 1, stat = "identity") +
+  coord_polar("y", start=0) + 
+  theme_void()+
+  ggtitle("Friuli-Venezia Giulia")+
+  scale_fill_manual(values=c("#EC7063", "#F4D03F", "#52BE80", "#71A0F1"))
+m <- ggplot(subset(geo_mun_for_bar, Denominazione_Regione == "Liguria"), aes(x=" ", y=freq, fill=life)) +
+  geom_bar(width = 1, stat = "identity") +
+  coord_polar("y", start=0) + 
+  theme_void()+
+  ggtitle("Liguria")+
+  scale_fill_manual(values=c("#EC7063", "#F4D03F", "#52BE80", "#71A0F1"))
+n <- ggplot(subset(geo_mun_for_bar, Denominazione_Regione == "Piemonte"), aes(x=" ", y=freq, fill=life)) +
+  geom_bar(width = 1, stat = "identity") +
+  coord_polar("y", start=0) + 
+  theme_void()+
+  ggtitle("Piemonte")+
+  scale_fill_manual(values=c("#EC7063", "#F4D03F", "#52BE80", "#71A0F1"))
+o <- ggplot(subset(geo_mun_for_bar, Denominazione_Regione == "Veneto"), aes(x=" ", y=freq, fill=life)) +
+  geom_bar(width = 1, stat = "identity") +
+  coord_polar("y", start=0) + 
+  theme_void() +
+  ggtitle("Veneto")+
+  scale_fill_manual(values=c("#EC7063", "#F4D03F", "#52BE80", "#71A0F1"))
+p <- ggplot(subset(geo_mun_for_bar, Denominazione_Regione == "Lombardia"), aes(x=" ", y=freq, fill=life)) +
+  geom_bar(width = 1, stat = "identity") +
+  coord_polar("y", start=0) + 
+  theme_void()+
+  ggtitle("Lombardia")+
+  scale_fill_manual(values=c("#EC7063", "#F4D03F", "#52BE80", "#71A0F1"))
+q <- ggplot(subset(geo_mun_for_bar, Denominazione_Regione == "Toscana"), aes(x=" ", y=freq, fill=life)) +
+  geom_bar(width = 1, stat = "identity") +
+  coord_polar("y", start=0) + 
+  theme_void()+
+  ggtitle("Toscana")+
+  scale_fill_manual(values=c("#F1C40F", "#52BE80", "#5DADE2"))
+r <- ggplot(subset(geo_mun_for_bar, Denominazione_Regione == "Trentino-Alto Adige/Südtirol"), aes(x=" ", y=freq, fill=life)) +
+  geom_bar(width = 1, stat = "identity") +
+  coord_polar("y", start=0) + 
+  theme_void()+
+  ggtitle("Trentino-Alto Adige")+
+  scale_fill_manual(values=c("#F1C40F", "#52BE80", "#5DADE2"))
+s <- ggplot(subset(geo_mun_for_bar, Denominazione_Regione == "Emilia-Romagna"), aes(x=" ", y=freq, fill=life)) +
+  geom_bar(width = 1, stat = "identity") +
+  coord_polar("y", start=0) + 
+  theme_void()+
+  ggtitle("Emilia-Romagna")+
+  scale_fill_manual(values=c("#EC7063", "#F4D03F", "#52BE80", "#71A0F1"))
+t <- ggplot(subset(geo_mun_for_bar, Denominazione_Regione == "Valle d'Aosta/Vallée d'Aoste"), aes(x=" ", y=freq, fill=life)) +
+  geom_bar(width = 1, stat = "identity") +
+  coord_polar("y", start=0) + 
+  theme_void()+
+  ggtitle("Valle d'Aosta")+
+  scale_fill_manual(values=c("#F1C40F", "#52BE80", "#5DADE2"))
+
+#grid.arrange(j, k, l, m, n, o, p, q, r, s, t, nrow = 4)
+
+#to sum up the pies
+grid.arrange(a, b, c, d, e, f, g, h, i, nrow = 3)
+```
+
+```{r pie_regions_2, out.width="60%", fig.align='center'}
+grid.arrange(j, k, l, m, n, o, p, q, r, nrow = 3)
+```
+
+```{r pie_regions_3, out.width="60%", fig.align='center'}
+grid.arrange(s, t, nrow = 1)
+```
+
+
+### 3.3. Classification with k-Nearest Neighbour algorithm
+
+One simple and powerful way to deal with classification of observations with numerical features is the **k-Nearest Neighbour** algorithm. It uses some notion of distance (usually the Euclidean one) to classify each point with the majority label of the ```k``` closest points. In this way we can construct a model able to classify whichever municipality, according to a _similarity (by proximity) principle_, as a municipality in which there is a low, medium, high or very high level of quality of life.
+
+For the sake of model creation it has been used only a subset of features (the ones selected by the forward search) in order to avoid the _curse of dimensionality_ for the k-NN algorithm, which is an exponential dependence on the number of features of the training set size; in practice it means that it becomes difficult for a learning algorithm when observations lie in a high-dimensional space^[Machine Learning — Statistical Methods for Machine Learning: Risk Analysys for Nearest-Neighbor, Nicolò Cesa-Bianchi <http://cesa-bianchi.di.unimi.it/MSA/Notes/nnRisk.pdf>].
+
+```{r knn_setup}
+################################################################################
+############   KNN method for classification
+################################################################################
+
+#disoccupazione, auto_e5_e6, occupazione_m_f, 
+#popolazione_straniera, visitatori_luoghi_cultura
+data_for_knn <- mun_subset[,c(1,19,28,25,35,12)]
+#str(data_for_knn)
+
+data_for_knn <- merge(data_for_knn, geo_mun, by = 'comune')
+rownames(data_for_knn) <- data_for_knn$comune
+#str(data_for_knn)
+
+data_for_knn <- data_for_knn[,-c(1,7,8,9,10,11,12,13)]
+normalize <-function(x) {(x-min(x))/(max(x)-min(x))}
+data <- as.data.frame(lapply(data_for_knn[,-6], normalize))
+#summary(data)
+#colSums(is.na(data))
+```
+
+```{r train_test_split_knn}
+#train set
+set.seed(12345)
+
+train = sample(1:nrow(data), 0.7*nrow(data))
+train_set <- data[train,]
+test_set <- data[-train,]
+
+target_labels <- data_for_knn[train, 6]
+test_labels <- data_for_knn[-train, 6]
+```
+
+```{r knn_cv}
+#try to make cross validation with all the dataset
+library(caret)
+set.seed(400)
+ctrl <- trainControl(method = "repeatedcv", repeats = 5)
+#scale data
+data_for_knn[,c(1:5)] <- as.data.frame(lapply(data_for_knn[,-6], normalize))
+
+#------------------------KNN CV-------------------------------------------------
+knnFit <- train(life ~ ., data = data_for_knn, method = "knn", trControl = ctrl, preProcess = c("center","scale"),tuneLength = 20)
+#knnFit
+```
+
+For the tuning of the best hyperparameter $k$, a **repeated cross validation** with 5 repetitions is made on the entire dataset (not only with the training set), and as it can be seen in the graph below, the **cross validated accuracy** is _maximized_ with the hyperparameter $k = 11$. 
+
+```{r knn_cv_best_tune, out.width="60%", fig.align='center'}
+#13-NN the one with best accuracy
+plot(knnFit)
+knnFit$bestTune
+```
+
+Training the ```11-NN``` classification model on the training set and checking how the model performs with test data confirms the **accuracy of almost 94%**.
+
+```{r 11-nn_train_test, out.width="60%", fig.align='center'}
+#check the accuracy with train test split
+#13-NN has an accuracy of 94.12%
+library(class)
+knn.model <- knn(train = train_set, test = test_set, cl = target_labels, k = 11)
+
+tab <- table(knn.model, test_labels)
+accuracy <- function(x){sum(diag(x)/(sum(rowSums(x)))) * 100}
+accuracy(tab)
+tab
+```
+
+## 4. Unsupervised Learning Methods
+
+Switching our mind to _unsupervised learning techniques_, no more considering the response variable of the quality of life, we can try to see whether it is possible to **reduce the dimensionality** of our data projecting the data matrix onto a lower dimensional space (without loosing too much information) and ultimately if there exists some way to **cluster** our observations (for all the municipalities or just the ones which are provincial capital).
+
+### 4.1. Principal Component Analysis
+
+```{r unsupervised_preparation}
+##################### load all the packages required
+library(dplyr)
+library(factoextra)
+library(tidyverse)
+library(ggplot2)
+####################
+
+#read the csv I prepared in the first preprocessing and cleaning
+################################################################################
+setwd('/Users/andreacutrera/Desktop/Municipalities-Provinces')
+prov <- read.csv('prov.csv', sep = ',', header = T)
+municip <- read.csv('municipalities.csv', sep = ',', header = T)
+
+#in all of them delete the first column
+municip <- municip[,-1]
+prov <- prov[,-1]
+
+rownames(prov) <- prov$codice_provincia
+prov <- prov[,-c(1,2)]
+rownames(municip) <- municip$comune
+municip <- municip[,-1]
+
+#now my dataset is made up by a bunch of int-num variables (58)
+#114 Provinces (observations for 2011)
+#str(prov)
+#dim(prov)
+#rownames(prov)
+#colnames(prov)
+
+#str(municip)
+#dim(municip)
+#rownames(municip)
+#colnames(municip)
+################################################################################
+my_vars <- c('variazione_pop_residente', 
+          'densita_umana', 'mobilita_privata',
+          'vecchiaia', 'verde_urbano_pro_capite',
+          'coppie_giovani_con_figli', 'presenza_universitaria', 'pendolarismo',
+          'dinamismo_economico', 'tasso_funzione_ricettiva', 
+          'visitatori_luoghi_cultura', 'intrattenimento',
+          'digital_divide', 'stazioni_accessibili', 'posti_letto_ospedale',
+          'biblioteche', 'abbandono_scolastico_2grado', 'disoccupazione',
+          'famiglie_rischio_disagio_economico',
+          'anziani_soli', 'suicidio', 'affollamento_abitazioni',
+          'servizi_abitazione', 'popolazione_straniera', 'gini', 
+          'occupazione_ita_straniera', 'occupazione_m_f', 'suolo_agricolo_utilizzato',
+          'rifiuti_urbani_pro_capite', 'mobilita_lenta', 'acqua_potabile', 
+          'raccolta_differenziata', 'impianti_fotovoltaici', 
+          'auto_e5_e6', 'centri_eccellenza')
+
+
+
+
+####################################################
+#UNSUPERVISED
+####################################################
+
+#http://www.sthda.com/english/articles/31-principal-component-methods-in-r-practical-guide/118-principal-component-analysis-in-r-prcomp-vs-princomp/
+municip %>% select(all_of(my_vars)) -> municip_subset
+
+#colSums(is.na(municip_subset))
+#stazioni accessibili 350 missing values
+municip_subset %>% drop_na() -> municip_subset
+#colSums(is.na(municip_subset))
+#35 variables, all regressors for 7571 MUNICIPALITIES
+#dim(municip_subset)
+
+#try to cluster municipalities
+mun_standard <- scale(municip_subset) # To standarize the variables
+#summary(mun_standard)
+#str(mun_standard)
+
+
+set.seed(12345)
+k.means.fit <- kmeans(mun_standard, 5) # try with k = 5
+#str(k.means.fit)
+
+#k.means.fit$cluster
+
+wssplot <- function(data, nc=15, seed=1234){
+  wss <- (nrow(data)-1)*sum(apply(data,2,var))
+  for (i in 2:nc){
+    set.seed(seed)
+    wss[i] <- sum(kmeans(data, centers=i)$withinss)
+    }
+  plot(1:nc, wss, type="b", xlab="Number of Clusters",
+       ylab="Within groups sum of squares")}
+
+#wssplot(mun_standard, nc=5)
+```
+
+_Principal Component Analysis_ is a technique which allows us to project data (scaled) onto a lower dimensional space, without loosing too much information. It is based on the **singular value decomposition principle** (which is a generalization of the _spectral theorem_) which decomposes our data matrix into: $X = U \Sigma V^T$. 
+
+1. $X$ is the matrix of our data scaled
+2. $U$ is the orthonormal matrix composed by the eigenvectors of $XX^T$ 
+3. $V^T$ is the orthonormal matrix composed by the eigenvectors of $X^TX$
+4. $\Sigma$ is the diagonal matrix of the singular values associated to the principal components. 
+
+With **PCA** we retain the **principal components** associated with the **highest singular values**. For the data matrix we are analyzing unfortunately we are not able to project data on few dimensions, maybe because of heterogeneity of features. The independent variables measure pretty different things for our datapoints, and this makes our dimensionality reduction not an easy task.
+
+Using the subset of observations for the provincial capital municipalities we got a principal component analysis which can be also described by a scree plot.
+
+```{r pca_eig_variance}
+library(FactoMineR)
+library(factoextra)
+#try to cluster PROVINCES
+prov %>% select(all_of(my_vars)) -> prov
+prov_standard <- scale(prov)  # To standarize the variables
+#summary(prov_standard)
+
+#for PROVINCES
+
+pca <- PCA(prov_standard,  graph = FALSE)
+get_eig(pca)[1:10,]
+```
+
+```{r pca_scree_plot, out.width="50%", fig.align='center'}
+fviz_screeplot(pca, addlabels = TRUE, ylim = c(0, 30))
+```
+
+In order to understand what each of the 5 dimensions found represent, we can check the **loadings** (i.e., _contributions_) of the variables with a simple bar chart. In that way we are able to recognize what each dimension stands for.
+
+```{r var_contribution, out.width="60%", fig.align='center', include=FALSE}
+var <- get_pca_var(pca)
+#var
+#var$coord
+var$contrib
+```
+
+1. _dimension 1_: **Economical dimension**
+2. _dimension 2_: **Social Cultural dimension**
+3. _dimension 3_: **Transportation dimension**
+4. _dimension 4_: **Demographic dimension**
+5. _dimension 5_: **Green dimension**
+
+```{r loadings_1, out.width="60%", fig.align='center', include=FALSE}
+fviz_pca_var(pca, col.var="contrib",
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE # Avoid text overlapping
+)
+```
+
+
+```{r loadings_2, out.width="50%", fig.align='center'}
+#economical
+fviz_contrib(pca, choice = "var", axes = 1, top = 10)
+```
+
+
+```{r loadings_3, out.width="50%", fig.align='center'}
+#social-cultural
+dim2 <- fviz_contrib(pca, choice = "var", axes = 2, top = 10)
+#transportation
+dim3 <- fviz_contrib(pca, choice = "var", axes = 3, top = 10)
+
+grid.arrange(dim2, dim3, nrow=1)
+```
+
+
+```{r loadings_4, out.width="50%", fig.align='center'}
+#demographic
+dim4 <- fviz_contrib(pca, choice = "var", axes = 4, top = 10)
+#green
+dim5 <- fviz_contrib(pca, choice = "var", axes = 5, top = 10)
+
+grid.arrange(dim4, dim5, nrow=1)
+```
+
+One last check could be to visualize the positioning of our observations in the 2 main dimensions grouped by the geographical areas. The south group seems distant from the center and north ones, which are instead pretty close to each other.
+
+```{r pca_for_grouped_prov_by_area_geo, out.width="60%", fig.align='center'}
+area <- c(0,2,1,0,2,1,1,2,0,0,0,2,0,2,2,2,2,0,0,0,0,0,0,0,0,1,2,0,2,0,2,0,1,2,1,0,1,2,2,1,0,2,1,1,2,0,1,0,2,1,2,1,1,2,1,0,0,2,2,2,0,2,0,0,0,2,0,2,2,1,1,1,2,1,1,2,0,1,0,2,0,2,1,2,1,2,0,0,0,2,1,0,2,0,0,1,1,2,0,0,2,2,2,2,1,2,2,2,2,2,0,2,0,1)
+#length(area)
+#dim(prov_standard)
+prov_pca <- cbind(area, prov_standard)
+prov_pca <- as.data.frame(prov_pca)
+prov_pca$area <- as.factor(prov_pca$area)
+
+pca <- PCA(prov_pca[,-1], graph = FALSE)
+fviz_pca_ind(pca,
+             label = "none", # hide individual labels
+             habillage = prov_pca$area, # color by groups
+             palette = c("#00AFBB", "#E7B800", "#FC4E07"),
+             addEllipses = TRUE # Concentration ellipses
+)
+```
+
+### 4.2. Clustering with k-means algorithm
+
+Clustering methods are many, but the one which best fits numerical features is the **k-Means** algorithm. This algorithm makes a partition into the $K$ pre-specified clusters _minimizing the within variation of each cluster_, and at least assigning each datapoint to the cluster $K$ with the _closest centroid_.
+
+Making an attempt with 5 clusters, as the ones used for geographic classification (e.g. North-East, North-West, Centre, South and Islands) we can see that the within-cluster variation is _minimized_ for the number of cluster $K = 4$.
+
+```{r within_variance_cluster, out.width="60%", fig.align='center'}
+set.seed(12345)
+k.means.fit <- kmeans(mun_standard, 5) # k = 5
+#str(k.means.fit)
+
+#k.means.fit$cluster
+
+wssplot <- function(data, nc=15, seed=1234){
+  wss <- (nrow(data)-1)*sum(apply(data,2,var))
+  for (i in 2:nc){
+    set.seed(seed)
+    wss[i] <- sum(kmeans(data, centers=i)$withinss)
+    }
+  plot(1:nc, wss, type="b", xlab="Number of Clusters",
+       ylab="Within groups sum of squares")}
+
+wssplot(mun_standard, nc=5)
+```
+
+```{r boxplots_4_clusters, out.width="60%", fig.align='center', include=FALSE}
+#the optimal choice is 4 clusters
+k.means.fit <- kmeans(mun_standard, 4) #  k = 4
+
+#disoccupazione, auto_e5_e6, occupazione_m_f, popolazione_straniera, visitatori_luoghi_cultura
+par(mfrow=c(2,2))
+boxplot(municip_subset$disoccupazione ~ k.means.fit$cluster, 
+        xlab = "Clusters", ylab = "Disoccupazione")
+
+#boxplot(municip_subset$auto_e5_e6 ~ k.means.fit$cluster, 
+        #xlab = "Clusters", ylab = "Auto euro5, euro6")
+
+boxplot(municip_subset$occupazione_m_f ~ k.means.fit$cluster, 
+        xlab = "Clusters", ylab = "Rapporto occupazione maschile/femminile")
+
+boxplot(municip_subset$popolazione_straniera ~ k.means.fit$cluster, 
+        xlab = "Clusters", ylab = "Popolazione straniera")
+
+boxplot(municip_subset$visitatori_luoghi_cultura ~ k.means.fit$cluster, 
+        xlab = "Clusters", ylab = "Visitatori luoghi cultura")
+```
+
+```{r cluster_municipalities, out.width="60%", fig.align='center'}
+library(cluster)
+clusplot(mun_standard, k.means.fit$cluster, 
+         main='2D representation of the Cluster solution',
+         color=TRUE, shade=F,
+         labels=0, lines=0)
+```
+
+Plotting the results of the clustering for the municipalities, we can see nothing, so, in order to make something more interpretable we do the same procedure on the subset of observations with the municipalities which are provincial capitals, just to better understand how the 4 clusters are composed.
+
+```{r list_between_clusters, include=FALSE}
+#try to cluster PROVINCES
+prov %>% select(all_of(my_vars)) -> prov
+prov_standard <- scale(prov)  # To standarize the variables
+#summary(prov_standard)
+
+set.seed(12345)
+k.means.fit <- kmeans(prov_standard, 4) # k = 4
+#str(k.means.fit)
+
+k.means.fit$cluster[k.means.fit$cluster == 1]
+k.means.fit$cluster[k.means.fit$cluster == 2]
+k.means.fit$cluster[k.means.fit$cluster == 3]
+k.means.fit$cluster[k.means.fit$cluster == 4]
+```
+
+Provincial capitals municipalities are in a sense clustered by the _4-Means_ algorithm in the following way:
+
+1. **Milan**, **Naples**, **Rome** and **Turin**, probably the **biggest** among **italian cities**;
+2. mostly **nothern cities**;
+3. mostly **southern cities**;
+4. mostly cities of the **centre**.
+
+```{r cluster_prov, out.width="80%", fig.align='center'}
+library(cluster)
+clusplot(prov_standard, k.means.fit$cluster, 
+         main='Cluster of Provinces',
+         color=TRUE, shade=TRUE,
+         labels = 2, lines=0)
+```
+
+For a better visualization of the cluster just plotted above, I decided to create a geographical map of Italy because it better delivers the message: Italy is clearly divided in 3 groups that correspond to the geographical positioning of cities. Therefore similarities and differences correspond not only to the latitude but also the longitude. The result plotted is not completely in accordance with the expectations set at the beginning of the analysis.
+
+```{r italy_map, out.width="90%", fig.align='center'}
+library(maptools)
+library(ggplot2)
+library(ggalt)
+library(ggthemes)
+library(tibble)
+library(viridis)
+
+# get italy region map
+italy_map <- map_data("italy")
+choro_dat <- data_frame(region=unique(italy_map$region),
+                        value=sample(100, length(region)))
+clusters <- c(0,4,2,2,2,2,4,2,2,2,
+              2,2,2,2,2,2,2,2,2,1,
+              2,1,2,2,2,4,4,2,4,2,
+              4,2,2,2,2,2,4,2,4,0,
+              0,4,2,4,4,4,4,2,4,4,
+              4,2,4,4,4,4,4,4,4,0,
+              4,4,1,4,3,4,3,4,3,3,
+              3,3,3,4,1,3,3,3,3,3,
+              4,4,3,2,3,3,3,3,3,3,
+              3,3,3,3,4)
+
+choro_dat$value <- clusters
+
+gg <- ggplot()
+gg <- gg + geom_map(data=italy_map, map=italy_map,
+                    aes(long, lat, map_id=region),
+                    color="#b2b2b2", size=0.1)
+gg <- gg + geom_map(data=choro_dat, map=italy_map,
+                    aes(fill=value, map_id=region),
+                    color="#b2b2b2", size=0.1)
+gg <- gg + scale_fill_viridis(name="Value")
+gg
+```
+
+
+```{r boxplot_prov_cluster, out.width="60%", fig.align='center', include=FALSE}
+par(mfrow=c(2,2))
+boxplot(prov$disoccupazione ~ k.means.fit$cluster, 
+        xlab = "Clusters", ylab = "Disoccupazione")
+
+#boxplot(prov$auto_e5_e6 ~ k.means.fit$cluster, 
+        #xlab = "Clusters", ylab = "Auto euro5, euro6")
+
+boxplot(prov$occupazione_m_f ~ k.means.fit$cluster, 
+        xlab = "Clusters", ylab = "Rapporto occupazione maschile/femminile")
+
+boxplot(prov$popolazione_straniera ~ k.means.fit$cluster, 
+        xlab = "Clusters", ylab = "Popolazione straniera")
+
+boxplot(prov$visitatori_luoghi_cultura ~ k.means.fit$cluster, 
+        xlab = "Clusters", ylab = "Visitatori luoghi cultura")
+```
+
+## 5. Conslusions
+
+The main findings of this paper can be summarized in the following points:
+
+1. A **descriptive model** with _linear regression_ for the response of quality of life score is found with statistically significative coefficients: 
+
+- Quality of life of Italian municipalities is **negatively** related with the **unemployment rate**. The higher the unemployment, the lower is the quality of life experienced by citizens;
+- The cars driven by italians influence their lives: the **newer and less fuel-consuming** the **cars** are, the higher is the quality of life;
+- When **women are not actively engaged in the labour market** as much as men, italian municipalities experience a life with **lower quality**;
+- Municipalities where there is a **cosmopolitan and inclusive attitude** towards **foreign citizens**, all the community can benefit from it, at least **increasing the life quality**;
+- **Tourism positively** affects the conditions in which citizens live: having tourists that visit the historical buildings and museums, is a factor of **better everyday life**. 
+
+The model also seems to predict well when tested on unaccessed data.
+
+2. A **classification model** with _11-Nearest Neighbour_ is found with an accuracy of almost 94%. It means that asking to the model which is one of the 4 category level (low, medium, high, very high quality of life) attached to a municipality for which we have the 5 information (i.e., unemployment, E5-E6 cars, ratio between males and females employment, foreign population and visitors of cultural places) available, approximately in the 94% of the times it will classify well.
+
+3. _Principal component analysis_ reveals 5 main dimensions along which our data are spread the most, and they are the following:
+
+- The first and _main component_ is the **Economic dimension** which turns out to have the following variables as the main _contributors_: unemployment, risk of families living in disconfort and economic dynamism. 
+
+As expected the most important dimension along which data are spread is the economic one.
+
+- The second principal component has been called **Social Cultural dimension**, because it identifies the variables which measure social factors such as suicide, gini coefficient of inequality and cultural factors driven by presence of universities, centres of excellence, presence of tourists visiting cultural places, museums and places of entertainment.
+
+- The third dimension is the **Transportation** one, because the main contribution comes from the measure of slow mobility.
+
+- The **Demographic dimension** is the fouth component and it is prevalently guided by the number of young couples with children, the variation of resident population and share of  foreign residents.
+
+- The last component found is the **Green dimension**, and it has the most important contribution from the urban waste and green areas per capita.
+
+
+4. Clustering method of _K-means_ reveals the possibility to make a partition of our observations (provincial capital municipalities) into 4 groups, according to the first 2 dimensions just identified: _Economic_ and _Social-Cultural_ dimension.
+
++ **Milan**, **Naples**, **Rome** and **Turin**, which are the **biggest italian cities**, can be identified in the upper part of the graph because of much difference in the Social-Cultural dimension with respect to the other municipalities. These cities are clearly differentiated from the other 3 clusters in particular for the suicides, the inequality, the presence of universities, centres of excellence and museums. 
+We are clearly discussing about the most important cities where the major part of Italians live, and they seem to be the ones where there is much inequality.
+
+In the lower part of the Social-Cultural dimension, the remaining 3 clusters are mainly distinguished by the first principal component: the Economic one.
+
++ Lower coordinates for the first component identifies mostly **nothern cities**; they are municipalities in which there is at least a lower unemployment rate and a lower risk for families to live in hardship.
+
++ Middle coordinates for the economic component then identifies mostly cities of the **centre**.
+
++ **Southern cities** instead comes with higher coordinates for economic dimension.
+
